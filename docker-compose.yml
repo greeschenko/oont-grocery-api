@@ -1,0 +1,39 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: oont-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: oont
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: oont-app
+    restart: always
+    ports:
+      - '3000:3000'
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    # Wait until Postgres is ready before starting the app
+    command: >
+      sh -c "
+      until nc -z postgres 5432; do
+        echo 'Waiting for Postgres...';
+        sleep 2;
+      done;
+      npx prisma migrate deploy;
+      npm run start:prod
+      "
+
+volumes:
+  postgres_data:
