@@ -45,6 +45,7 @@ A NestJS + PostgreSQL backend service for grocery inventory, carts, categories, 
 ```bash
 git clone https://github.com/greeschenko/oont-grocery-api.git
 cd oont-grocery-api
+cp env.example .env
 ```
 
 ### Build and Run
