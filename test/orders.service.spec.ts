@@ -25,10 +25,7 @@ describe('OrdersService - full coverage', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        OrdersService,
-        { provide: PrismaService, useValue: prisma },
-      ],
+      providers: [OrdersService, { provide: PrismaService, useValue: prisma }],
     }).compile();
 
     service = module.get<OrdersService>(OrdersService);
@@ -36,13 +33,12 @@ describe('OrdersService - full coverage', () => {
 
   afterEach(() => jest.clearAllMocks());
 
-  describe('createFromCart - full coverage', () => {
+  describe('createFromCart', () => {
     it('should create order successfully', async () => {
       prisma.$transaction.mockImplementation(async (fn) => fn(prisma));
-
       prisma.cart.findUnique.mockResolvedValue(mockCart);
       prisma.product.findMany.mockResolvedValue([mockProduct]);
-      prisma.order.create.mockResolvedValue(mockOrder);
+      prisma.order.create.mockResolvedValue({ ...mockOrder, items: [mockOrderItem] });
       prisma.product.update.mockResolvedValue(mockProduct);
       prisma.cartItem.deleteMany.mockResolvedValue({ count: 1 });
       prisma.$queryRaw.mockResolvedValue([]);
@@ -50,7 +46,7 @@ describe('OrdersService - full coverage', () => {
       const result = await service.createFromCart('user-1');
 
       expect(result).toEqual(mockOrder);
-      expect(prisma.$queryRaw).toHaveBeenCalled(); // FOR UPDATE
+      expect(prisma.$queryRaw).toHaveBeenCalled();
       expect(prisma.product.update).toHaveBeenCalledWith({ where: { id: 'prod-1' }, data: { stock: { decrement: 2 } } });
       expect(prisma.cartItem.deleteMany).toHaveBeenCalledWith({ where: { cartId: 'cart-1' } });
     });
@@ -72,7 +68,7 @@ describe('OrdersService - full coverage', () => {
     });
   });
 
-  describe('cancel - full coverage', () => {
+  describe('cancel', () => {
     it('should cancel order and increment stock', async () => {
       prisma.$transaction.mockImplementation(async (fn) => fn(prisma));
       prisma.order.findUnique.mockResolvedValue({ ...mockOrder, items: [mockOrderItem] });

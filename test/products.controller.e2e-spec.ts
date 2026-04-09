@@ -9,15 +9,16 @@ describe('ProductsController (e2e)', () => {
     let app: INestApplication;
     let service: ProductsService;
 
+    const CATEGORY_ID = '550e8400-e29b-41d4-a716-446655440010';
+    const PRODUCT_ID = '550e8400-e29b-41d4-a716-446655440020';
+
     const mockProduct = {
         id: 'prod-1',
         name: 'Apple',
         description: 'Red apple',
         price: 100,
         stock: 50,
-        categoryId: 'cat-1',
-        deletedAt: null,
-        category: { id: 'cat-1', name: 'Fruits' },
+        categoryId: CATEGORY_ID,
     };
 
     const prismaMock = {
@@ -90,15 +91,12 @@ describe('ProductsController (e2e)', () => {
         expect(res.body).toEqual(mockProduct);
     });
 
-    it('/products/:id (GET) should return null if product not found', async () => {
+    it('/products/:id (GET) should return 404 if product not found', async () => {
         prismaMock.product.findUnique.mockResolvedValue(null);
 
-        const res = await request(app.getHttpServer())
+        await request(app.getHttpServer())
             .get('/products/not-exist')
-            .expect(200);
-
-        expect(res.body).toEqual({});
-        expect(res.text).toBe('');
+            .expect(404);
     });
 
     // ---------------- POST /products ----------------
@@ -112,7 +110,7 @@ describe('ProductsController (e2e)', () => {
                 description: 'Red apple',
                 price: 100,
                 stock: 50,
-                categoryId: 'cat-1',
+                categoryId: CATEGORY_ID,
             })
             .expect(201);
 
@@ -121,12 +119,22 @@ describe('ProductsController (e2e)', () => {
 
     // ---------------- PUT /products/:id ----------------
     it('/products/:id (PUT) should update product', async () => {
-        const updatedProduct = { ...mockProduct, name: 'Banana' };
+        const updatedProduct = {
+            ...mockProduct,
+            name: 'Banana',
+        };
+
         prismaMock.product.update.mockResolvedValue(updatedProduct);
 
         const res = await request(app.getHttpServer())
-            .put('/products/prod-1')
-            .send({ name: 'Banana' })
+            .put(`/products/${PRODUCT_ID}`)
+            .send({
+                name: 'Banana',
+                description: mockProduct.description,
+                price: mockProduct.price,
+                stock: mockProduct.stock,
+                categoryId: mockProduct.categoryId,
+            })
             .expect(200);
 
         expect(res.body).toEqual(updatedProduct);
@@ -135,14 +143,26 @@ describe('ProductsController (e2e)', () => {
     // ---------------- DELETE /products/:id ----------------
     it('/products/:id (DELETE) should soft delete product', async () => {
         prismaMock.product.findUnique.mockResolvedValue(mockProduct);
-        const deletedProduct = { ...mockProduct, deletedAt: new Date() };
+
+        const deletedProduct = {
+            ...mockProduct,
+            deletedAt: new Date(),
+        };
+
         prismaMock.product.update.mockResolvedValue(deletedProduct);
 
         const res = await request(app.getHttpServer())
-            .delete('/products/prod-1')
+            .delete(`/products/${PRODUCT_ID}`)
             .expect(200);
 
-        expect(new Date(res.body.deletedAt).toString()).not.toBe('Invalid Date');
+        expect(res.body).toEqual({
+            id: mockProduct.id,
+            name: mockProduct.name,
+            description: mockProduct.description,
+            price: mockProduct.price,
+            stock: mockProduct.stock,
+            categoryId: mockProduct.categoryId,
+        });
     });
 
     it('/products/:id (DELETE) should return 404 if product not found', async () => {
@@ -155,14 +175,25 @@ describe('ProductsController (e2e)', () => {
 
     // ---------------- PATCH /products/:id/restore ----------------
     it('/products/:id/restore (PATCH) should restore soft-deleted product', async () => {
-        prismaMock.product.findUnique.mockResolvedValue({ ...mockProduct, deletedAt: new Date() });
+        prismaMock.product.findUnique.mockResolvedValue({
+            ...mockProduct,
+            deletedAt: new Date(),
+        });
+
         prismaMock.product.update.mockResolvedValue(mockProduct);
 
         const res = await request(app.getHttpServer())
-            .patch('/products/prod-1/restore')
+            .patch(`/products/${PRODUCT_ID}/restore`)
             .expect(200);
 
-        expect(res.body.deletedAt).toBeNull();
+        expect(res.body).toEqual({
+            id: mockProduct.id,
+            name: mockProduct.name,
+            description: mockProduct.description,
+            price: mockProduct.price,
+            stock: mockProduct.stock,
+            categoryId: mockProduct.categoryId,
+        });
     });
 
     it('/products/:id/restore (PATCH) should return 404 if product is not deleted', async () => {
@@ -171,5 +202,23 @@ describe('ProductsController (e2e)', () => {
         await request(app.getHttpServer())
             .patch('/products/prod-1/restore')
             .expect(404);
+    });
+
+    // ---------------- VALIDATION ----------------
+    it('/products (POST) should return 400 if required fields are invalid', async () => {
+        const invalidProduct = {
+            name: '',
+            description: 'Red apple',
+            price: -100,
+            stock: 0,
+            categoryId: 'not-uuid',
+        };
+
+        const res = await request(app.getHttpServer())
+            .post('/products')
+            .send(invalidProduct)
+            .expect(400);
+
+        expect(res.body.message).toBeDefined();
     });
 });

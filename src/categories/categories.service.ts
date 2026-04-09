@@ -6,27 +6,41 @@ import { Category, Prisma } from '@prisma/client';
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Get all categories
-  async findAll(): Promise<Category[]> {
+  // Get all categories with products
+  async findAll(): Promise<(Category & { products: { id: string; name: string; stock: number }[] })[]> {
     return this.prisma.category.findMany({
-      include: { products: true }, // include related products
+      include: {
+        products: {
+          select: {
+            id: true,
+            name: true,
+            stock: true,
+          },
+        },
+      },
     });
   }
 
-  // Get single category by ID
-  async findOne(id: string): Promise<Category | null> {
+  // Get single category by ID with products
+  async findOne(id: string): Promise<(Category & { products: { id: string; name: string; stock: number }[] }) | null> {
     return this.prisma.category.findUnique({
       where: { id },
-      include: { products: true },
+      include: {
+        products: {
+          select: {
+            id: true,
+            name: true,
+            stock: true,
+          },
+        },
+      },
     });
   }
 
-  // Create a new category
   async create(data: Prisma.CategoryCreateInput): Promise<Category> {
     return this.prisma.category.create({ data });
   }
 
-  // Update an existing category
   async update(id: string, data: Prisma.CategoryUpdateInput): Promise<Category> {
     return this.prisma.category.update({
       where: { id },
@@ -34,7 +48,6 @@ export class CategoriesService {
     });
   }
 
-  // Delete a category
   async remove(id: string): Promise<Category> {
     return this.prisma.category.delete({
       where: { id },

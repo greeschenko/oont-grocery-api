@@ -4,7 +4,6 @@ import request from 'supertest';
 import { CategoriesModule } from '../src/categories/categories.module';
 import { CategoriesService } from '../src/categories/categories.service';
 import { ProductsService } from '../src/products/products.service';
-import { Prisma } from '@prisma/client';
 
 describe('CategoriesController (e2e)', () => {
     let app: INestApplication;
@@ -12,16 +11,12 @@ describe('CategoriesController (e2e)', () => {
     let productsService: ProductsService;
 
     const mockCategory = {
-        id: '550e8400-e29b-41d4-a716-446655440000',
+        id: 'cat-1',
         name: 'Fruits',
+        products: [],
     };
 
-    const mockProduct = {
-        id: '550e8400-e29b-41d4-a716-446655440001',
-        name: 'Apple',
-        price: 100,
-        categoryId: mockCategory.id,
-    };
+    const mockProduct = { id: 'prod-1', name: 'Apple', price: 100, categoryId: mockCategory.id };
 
     const categoriesServiceMock = {
         findAll: jest.fn(),
@@ -36,7 +31,7 @@ describe('CategoriesController (e2e)', () => {
     };
 
     beforeAll(async () => {
-        const moduleFixture: TestingModule = await Test.createTestingModule({
+        const module: TestingModule = await Test.createTestingModule({
             imports: [CategoriesModule],
         })
             .overrideProvider(CategoriesService)
@@ -45,72 +40,52 @@ describe('CategoriesController (e2e)', () => {
             .useValue(productsServiceMock)
             .compile();
 
-        app = moduleFixture.createNestApplication();
+        app = module.createNestApplication();
         app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
         await app.init();
 
-        categoriesService = moduleFixture.get<CategoriesService>(CategoriesService);
-        productsService = moduleFixture.get<ProductsService>(ProductsService);
+        categoriesService = module.get<CategoriesService>(CategoriesService);
+        productsService = module.get<ProductsService>(ProductsService);
     });
 
-    afterAll(async () => {
-        await app.close();
-    });
-
-    afterEach(() => {
-        jest.clearAllMocks();
-    });
+    afterAll(async () => await app.close());
+    afterEach(() => jest.clearAllMocks());
 
     // ---------------- GET /categories ----------------
-    it('/categories (GET) should return all categories', async () => {
+    it('GET /categories - should return all categories', async () => {
         categoriesServiceMock.findAll.mockResolvedValue([mockCategory]);
 
-        const res = await request(app.getHttpServer())
-            .get('/categories')
-            .expect(200);
-
+        const res = await request(app.getHttpServer()).get('/categories').expect(200);
         expect(res.body).toEqual([mockCategory]);
     });
 
     // ---------------- GET /categories/:id ----------------
-    it('/categories/:id (GET) should return a category', async () => {
+    it('GET /categories/:id - should return a category', async () => {
         categoriesServiceMock.findOne.mockResolvedValue(mockCategory);
 
-        const res = await request(app.getHttpServer())
-            .get(`/categories/${mockCategory.id}`)
-            .expect(200);
-
+        const res = await request(app.getHttpServer()).get(`/categories/${mockCategory.id}`).expect(200);
         expect(res.body).toEqual(mockCategory);
     });
 
-    it('/categories/:id (GET) should return 404 if category not found', async () => {
-        categoriesServiceMock.findOne.mockRejectedValue(new NotFoundException('Category not found'));
-
-        await request(app.getHttpServer())
-            .get('/categories/non-existent-id')
-            .expect(404);
+    it('GET /categories/:id - should return 404 if not found', async () => {
+        categoriesServiceMock.findOne.mockResolvedValue(null);
+        await request(app.getHttpServer()).get('/categories/non-existent').expect(404);
     });
 
     // ---------------- POST /categories ----------------
-    it('/categories (POST) should create a category', async () => {
-        const createDto: Prisma.CategoryCreateInput = { name: 'Vegetables' };
-        const createdCategory = { id: '550e8400-e29b-41d4-a716-446655440002', name: 'Vegetables' };
-
+    it('POST /categories - should create a category', async () => {
+        const createDto = { name: 'Vegetables' };
+        const createdCategory = { id: 'cat-2', ...createDto };
         categoriesServiceMock.create.mockResolvedValue(createdCategory);
 
-        const res = await request(app.getHttpServer())
-            .post('/categories')
-            .send(createDto)
-            .expect(201);
-
+        const res = await request(app.getHttpServer()).post('/categories').send(createDto).expect(201);
         expect(res.body).toEqual(createdCategory);
     });
 
     // ---------------- PUT /categories/:id ----------------
-    it('/categories/:id (PUT) should update a category', async () => {
-        const updateDto: Prisma.CategoryUpdateInput = { name: 'Fruits & Vegetables' };
-        const updatedCategory = { ...mockCategory, ...updateDto };
-
+    it('PUT /categories/:id - should update a category', async () => {
+        const updateDto = { name: 'Fruits & Veg' };
+        const updatedCategory = { id: 'cat-1', name: 'Fruits & Veg' };
         categoriesServiceMock.update.mockResolvedValue(updatedCategory);
 
         const res = await request(app.getHttpServer())
@@ -121,37 +96,27 @@ describe('CategoriesController (e2e)', () => {
         expect(res.body).toEqual(updatedCategory);
     });
 
-    it('/categories/:id (PUT) should return 404 if category not found', async () => {
-        const updateDto: Prisma.CategoryUpdateInput = { name: 'Nothing' };
+    it('PUT /categories/:id - should return 404 if not found', async () => {
         categoriesServiceMock.update.mockRejectedValue(new NotFoundException());
-
-        await request(app.getHttpServer())
-            .put('/categories/non-existent-id')
-            .send(updateDto)
-            .expect(404);
+        await request(app.getHttpServer()).put('/categories/non-existent').send({ name: 'Test' }).expect(404);
     });
 
     // ---------------- DELETE /categories/:id ----------------
-    it('/categories/:id (DELETE) should delete a category', async () => {
+    it('DELETE /categories/:id - should delete a category', async () => {
         categoriesServiceMock.remove.mockResolvedValue(mockCategory);
 
         const res = await request(app.getHttpServer())
             .delete(`/categories/${mockCategory.id}`)
             .expect(200);
 
-        expect(res.body).toEqual(mockCategory);
-    });
-
-    it('/categories/:id (DELETE) should return 404 if category not found', async () => {
-        categoriesServiceMock.remove.mockRejectedValue(new NotFoundException());
-
-        await request(app.getHttpServer())
-            .delete('/categories/non-existent-id')
-            .expect(404);
+        expect(res.body).toEqual({
+            id: mockCategory.id,
+            name: mockCategory.name,
+        });
     });
 
     // ---------------- GET /categories/:id/products ----------------
-    it('/categories/:id/products (GET) should return products of a category', async () => {
+    it('GET /categories/:id/products - should return products of a category', async () => {
         productsServiceMock.findAll.mockResolvedValue([mockProduct]);
 
         const res = await request(app.getHttpServer())

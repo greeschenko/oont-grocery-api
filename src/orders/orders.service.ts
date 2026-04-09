@@ -5,10 +5,27 @@ import {
 } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { OrderDto } from './dto/order.dto';
 
 @Injectable()
 export class OrdersService {
     constructor(private readonly prisma: PrismaService) { }
+
+    private _mapToDto(order: any): OrderDto {
+        return {
+            id: order.id,
+            userId: order.userId,
+            status: order.status,
+            totalAmount: Number(order.totalAmount),
+            items: order.items.map((item: any) => ({
+                id: item.id,
+                productId: item.productId,
+                productNameSnapshot: item.productNameSnapshot,
+                quantity: item.quantity,
+                priceSnapshot: Number(item.priceSnapshot),
+            })),
+        };
+    }
 
     async findOne(id: string) {
         const order = await this.prisma.order.findUnique({
@@ -26,7 +43,7 @@ export class OrdersService {
             throw new NotFoundException('Order not found');
         }
 
-        return order;
+        return this._mapToDto(order);
     }
 
     async createFromCart(userId: string) {
@@ -138,12 +155,12 @@ export class OrdersService {
                 },
             });
 
-            return order;
+            return this._mapToDto(order);
         });
     }
 
     async cancel(orderId: string) {
-        return this.prisma.$transaction(async (tx) => {
+        const cancelledOrder = await this.prisma.$transaction(async (tx) => {
             const order = await tx.order.findUnique({
                 where: { id: orderId },
                 include: {
@@ -193,5 +210,7 @@ export class OrdersService {
                 },
             });
         });
+
+        return this._mapToDto(cancelledOrder);
     }
 }

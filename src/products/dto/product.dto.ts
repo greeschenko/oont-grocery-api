@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ProductDto {
-    @ApiProperty({ example: '1e2d3f...' })
+    @ApiProperty({ example: '550e8400-e29b-41d4-a716-446655441111' })
     id: string;
 
     @ApiProperty({ example: 'Apple' })

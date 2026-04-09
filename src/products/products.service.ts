@@ -1,53 +1,66 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, Product } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { GetProductsDto } from './dto/get-products.dto';
+import { ProductDto } from './dto/product.dto';
+import { PaginatedProductsDto } from './dto/paginated-products.dto';
+import { CreateProductDto } from './dto/create-product.dto';
 
 @Injectable()
 export class ProductsService {
     constructor(private readonly prisma: PrismaService) { }
 
+    private _mapToDto(product: any): ProductDto {
+        return {
+            id: product.id,
+            name: product.name,
+            description: product.description,
+            price: Number(product.price),
+            stock: product.stock,
+            categoryId: product.categoryId,
+        };
+    }
+
     // Soft delete a product
-    async softDelete(id: string): Promise<Product> {
-        // Check if product exists and not already deleted
-        const product = await this.prisma.product.findUnique({
-            where: { id },
-        });
+    async softDelete(id: string): Promise<ProductDto> {
+        const product = await this.prisma.product.findUnique({ where: { id } });
         if (!product || product.deletedAt) {
             throw new NotFoundException('Product not found or already deleted');
         }
-
-        // Set deletedAt timestamp
-        return this.prisma.product.update({
+        const updated = await this.prisma.product.update({
             where: { id },
             data: { deletedAt: new Date() },
         });
+        return this._mapToDto(updated);
     }
 
-    // Get all products
-    async findAll(dto: GetProductsDto) {
-        const { page = 1, limit = 20, search, categoryId } = dto;
+    // Restore soft-deleted product
+    async restore(id: string): Promise<ProductDto> {
+        const product = await this.prisma.product.findUnique({ where: { id } });
+        if (!product || !product.deletedAt) {
+            throw new NotFoundException('Product not found or not deleted');
+        }
+        const restored = await this.prisma.product.update({
+            where: { id },
+            data: { deletedAt: null },
+        });
+        return this._mapToDto(restored);
+    }
 
+    // Get all products with pagination and filtering
+    async findAll(dto: GetProductsDto): Promise<PaginatedProductsDto> {
+        const { page = 1, limit = 20, search, categoryId } = dto;
         const skip = (page - 1) * limit;
 
-        const where: any = {
-            deletedAt: null, // exclude soft deleted products
-        };
-
-        if (search) {
-            where.name = { contains: search, mode: 'insensitive' };
-        }
-
-        if (categoryId) {
-            where.categoryId = categoryId;
-        }
+        const where: any = { deletedAt: null };
+        if (search) where.name = { contains: search, mode: 'insensitive' };
+        if (categoryId) where.categoryId = categoryId;
 
         const [items, total] = await Promise.all([
             this.prisma.product.findMany({
                 where,
                 skip,
                 take: limit,
-                include: { category: true },
                 orderBy: { name: 'asc' },
             }),
             this.prisma.product.count({ where }),
@@ -57,52 +70,26 @@ export class ProductsService {
             page,
             limit,
             total,
-            items,
+            items: items.map(this._mapToDto),
         };
     }
 
-    // Get single product by ID
-    async findOne(id: string): Promise<Product | null> {
-        return this.prisma.product.findUnique({
-            where: { id },
-            include: { category: true },
-        });
+    // Get single product
+    async findOne(id: string): Promise<ProductDto> {
+        const product = await this.prisma.product.findUnique({ where: { id } });
+        if (!product) throw new NotFoundException('Product not found');
+        return this._mapToDto(product);
     }
 
-    // Create a new product
-    async create(data: Prisma.ProductCreateInput): Promise<Product> {
-        return this.prisma.product.create({ data });
+    // Create a product
+    async create(data: CreateProductDto): Promise<ProductDto> {
+        const product = await this.prisma.product.create({ data });
+        return this._mapToDto(product);
     }
 
-    // Update an existing product
-    async update(id: string, data: Prisma.ProductUpdateInput): Promise<Product> {
-        return this.prisma.product.update({
-            where: { id },
-            data,
-        });
-    }
-
-    // Delete a product
-    async remove(id: string): Promise<Product> {
-        return this.prisma.product.delete({
-            where: { id },
-        });
-    }
-
-    // Restore a soft-deleted product
-    async restore(id: string): Promise<Product> {
-        // Check if product exists and is actually deleted
-        const product = await this.prisma.product.findUnique({
-            where: { id },
-        });
-        if (!product || !product.deletedAt) {
-            throw new NotFoundException('Product not found or not deleted');
-        }
-
-        // Clear deletedAt timestamp
-        return this.prisma.product.update({
-            where: { id },
-            data: { deletedAt: null },
-        });
+    // Update a product
+    async update(id: string, data: Prisma.ProductUpdateInput): Promise<ProductDto> {
+        const product = await this.prisma.product.update({ where: { id }, data });
+        return this._mapToDto(product);
     }
 }
